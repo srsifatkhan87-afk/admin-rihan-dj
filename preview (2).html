@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Admin Rihan DJ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body{
+    margin:0;
+    height:100vh;
+    background: radial-gradient(circle, #0b0016, #000);
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    font-family: Arial, sans-serif;
+    color:white;
+    overflow:hidden;
+}
+
+/* 🪩 Neon animation */
+@keyframes neonPulse {
+    0% { box-shadow: 0 0 15px cyan; }
+    50% { box-shadow: 0 0 35px magenta; }
+    100% { box-shadow: 0 0 15px cyan; }
+}
+
+.panel{
+    width:95%;
+    max-width:520px;
+    background:rgba(0,0,0,0.85);
+    padding:20px;
+    border-radius:22px;
+    animation: neonPulse 2s infinite;
+    text-align:center;
+}
+
+h1{
+    margin:5px 0 10px;
+    font-size:30px;
+    text-shadow:0 0 20px magenta;
+}
+
+audio, input[type=range], button{
+    width:100%;
+    margin-top:8px;
+}
+
+button{
+    padding:10px;
+    border:none;
+    border-radius:18px;
+    background:linear-gradient(45deg, cyan, magenta);
+    font-weight:bold;
+    cursor:pointer;
+}
+
+label{
+    font-size:13px;
+    margin-top:6px;
+    display:block;
+}
+
+canvas{
+    width:100%;
+    height:130px;
+    background:black;
+    border-radius:10px;
+    margin-top:10px;
+    touch-action:none;
+}
+
+.samplers button{
+    width:30%;
+}
+</style>
+</head>
+
+<body>
+
+<div class="panel">
+<h1>🎧 Admin Rihan</h1>
+
+<audio id="music" controls>
+    <source src="music.mp3" type="audio/mpeg">
+</audio>
+
+<button onclick="startDJ()">🔥 Start DJ</button>
+<button onclick="voiceTag()">🎤 Voice Tag</button>
+
+<label>🎛️ Crossfader (Mic ↔ Music)</label>
+<input type="range" min="0" max="1" step="0.01" value="0.5"
+oninput="crossfade(this.value)">
+
+<label>🎚️ Echo</label>
+<input type="range" min="0" max="0.6" step="0.01" value="0.25"
+oninput="delayNode.delayTime.value=this.value)">
+
+<label>🔥 Bass</label>
+<input type="range" min="0" max="20" step="1" value="10"
+oninput="bass.gain.value=this.value">
+
+<div class="samplers">
+    <button onclick="playSample(0.5)">Loop</button>
+    <button onclick="playSample(0.8)">Build</button>
+    <button onclick="playSample(1.2)">Drop</button>
+</div>
+
+<canvas id="scratch"></canvas>
+<canvas id="viz"></canvas>
+
+<div id="status">Waiting…</div>
+</div>
+
+<script>
+let ctx, analyser, data;
+let mic, musicSrc;
+let micGain, musicGain;
+let delayNode, bass, lowpass;
+
+/* 🎤 Voice Tag */
+function voiceTag(){
+    const u = new SpeechSynthesisUtterance("DJ Admin Rihan in the mix!");
+    const voices = speechSynthesis.getVoices();
+    u.voice = voices.find(v=>v.name.toLowerCase().includes("female")) || voices[0];
+    speechSynthesis.speak(u);
+}
+
+function startDJ(){
+navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
+    ctx = new AudioContext();
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    data = new Uint8Array(analyser.frequencyBinCount);
+
+    mic = ctx.createMediaStreamSource(stream);
+    musicSrc = ctx.createMediaElementSource(music);
+
+    micGain = ctx.createGain();
+    musicGain = ctx.createGain();
+    delayNode = ctx.createDelay();
+    bass = ctx.createBiquadFilter();
+    lowpass = ctx.createBiquadFilter();
+
+    delayNode.delayTime.value=0.25;
+    bass.type="lowshelf";
+    bass.frequency.value=200;
+    bass.gain.value=10;
+    lowpass.type="lowpass";
+    lowpass.frequency.value=8000;
+
+    mic.connect(delayNode);
+    delayNode.connect(bass);
+    bass.connect(lowpass);
+    lowpass.connect(micGain);
+    micGain.connect(ctx.destination);
+
+    musicSrc.connect(musicGain);
+    musicGain.connect(ctx.destination);
+
+    mic.connect(analyser);
+    musicSrc.connect(analyser);
+
+    crossfade(0.5);
+    drawViz();
+    status.innerText="🔥 DJ LIVE";
+});
+}
+
+function crossfade(v){
+    micGain.gain.value = 1 - v;
+    musicGain.gain.value = v;
+}
+
+/* 🌈 Visualizer */
+function drawViz(){
+const c = viz.getContext("2d");
+function loop(){
+    analyser.getByteFrequencyData(data);
+    c.fillStyle="black";
+    c.fillRect(0,0,viz.width,viz.height);
+    let w = viz.width/data.length;
+    for(let i=0;i<data.length;i++){
+        let h=data[i];
+        c.fillStyle=`hsl(${i*4},100%,50%)`;
+        c.fillRect(i*w, viz.height-h, w-1, h);
+    }
+    requestAnimationFrame(loop);
+}
+loop();
+}
+
+/* 🎛️ Scratch pad */
+let scratching=false;
+scratch.addEventListener("pointerdown",()=>scratching=true);
+scratch.addEventListener("pointerup",()=>scratching=false);
+scratch.addEventListener("pointermove",()=>{
+    if(scratching) bass.gain.value=Math.random()*20;
+});
+
+/* 🎚️ Sampler */
+function playSample(rate){
+    music.playbackRate=rate;
+    setTimeout(()=>music.playbackRate=1,500);
+}
+</script>
+
+</body>
+</html>
